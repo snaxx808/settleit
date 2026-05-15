@@ -127,9 +127,12 @@ const db = {
     if (!supabase) return;
     await supabase.from("profiles").update(updates).eq("id",userId);
   },
-  async fileReport(data) {
-    if (!supabase) return;
-    await supabase.from("reports").insert(data);
+  async getUserVotes(userId) {
+    if (!supabase) return {};
+    const {data} = await supabase.from("votes").select("dispute_id, option_id, options(option_key)").eq("user_id", userId);
+    const map = {};
+    (data||[]).forEach(v => { map[v.dispute_id] = v.options?.option_key || v.option_id; });
+    return map;
   },
   subscribeToDispute(disputeId, onVote, onComment) {
     if (!supabase) return ()=>{};
@@ -668,8 +671,8 @@ function NewDisputeModal({onClose,onSubmit,T}) {
 }
 
 // ─── DISPUTE CARD ─────────────────────────────────────────────────────────────
-function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,following,onFollow,onOpenProfile,highlight,swipeMode,T,onReport,currentUserId}) {
-  const [voted,setVoted]=useState(null),[settling,setSettling]=useState(false);
+function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,following,onFollow,onOpenProfile,highlight,swipeMode,T,onReport,currentUserId,previousVote}) {
+  const [voted,setVoted]=useState(previousVote||null),[settling,setSettling]=useState(false);
   const [expanded,setExpanded]=useState(false),[commentText,setCommentText]=useState("");
   const [aiComLoad,setAiComLoad]=useState(false),[liked,setLiked]=useState([]);
   const [coachData,setCoachData]=useState(null),[showCoach,setShowCoach]=useState(false);
@@ -953,6 +956,7 @@ export default function App() {
 
   // App state
   const [disputes,setDisputes]=useState([]);
+  const [userVotes,setUserVotes]=useState({}); // disputeId -> optionKey the user voted
   const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState("home");
   const [feedFilter,setFeedFilter]=useState("hot");
@@ -1020,6 +1024,9 @@ export default function App() {
     // Load disputes
     const d=await db.getDisputes(feedFilter,null);
     setDisputes(d);
+    // Load user's previous votes so they persist across sessions
+    const votes=await db.getUserVotes(u.id);
+    setUserVotes(votes);
     setLoading(false);
     // Show welcome first time
     if(!localStorage.getItem("settleit_welcomed")){setShowWelcome(true);localStorage.setItem("settleit_welcomed","1");}
@@ -1060,6 +1067,7 @@ export default function App() {
     const opt=(d?.options||[]).find(o=>o.id===side);
     if(opt&&user){await db.castVote(id,opt.id||id,user.id);}
     setDisputes(p=>p.map(d=>d.id!==id?d:{...d,options:(d.options||[]).map(o=>o.id===side?{...o,votes:(o.votes||0)+1}:o)}));
+    setUserVotes(p=>({...p,[id]:side}));
     const nv=voteCount+1;setVoteCount(nv);
     setStreak(s=>s+1);
     checkBadges(nv,following,disputes);
@@ -1147,9 +1155,9 @@ export default function App() {
           <div style={{fontSize:14}}>{tab==="saved"?"No bookmarks yet.":tab==="following"?"Follow people to see their disputes.":"No disputes found."}</div>
           {tab==="home"&&<button onClick={()=>setShowNew(true)} style={{marginTop:14,background:T.red,border:"none",borderRadius:20,padding:"8px 18px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Create one →</button>}
         </div>}
-        {!loading&&filtered.slice(0,2).map(d=><DisputeCard key={d.id} d={d} onSettle={handleSettle} onVote={handleVote} onAddComment={handleAddComment} onReact={handleReact} onBookmark={handleBookmark} following={following} onFollow={handleFollow} onOpenProfile={setShowUserProfile} highlight={d.id===highlightId} swipeMode={swipeMode} T={T} onReport={handleReport} currentUserId={user?.id}/>)}
+        {!loading&&filtered.slice(0,2).map(d=><DisputeCard key={d.id} d={d} onSettle={handleSettle} onVote={handleVote} onAddComment={handleAddComment} onReact={handleReact} onBookmark={handleBookmark} following={following} onFollow={handleFollow} onOpenProfile={setShowUserProfile} highlight={d.id===highlightId} swipeMode={swipeMode} T={T} onReport={handleReport} currentUserId={user?.id} previousVote={userVotes[d.id]}/>)}
         {!loading&&filtered.length>2&&tab==="home"&&<SponsoredCard d={SPONSORED_DISPUTES[0]} onVote={()=>{}} T={T}/>}
-        {!loading&&filtered.slice(2).map(d=><DisputeCard key={d.id} d={d} onSettle={handleSettle} onVote={handleVote} onAddComment={handleAddComment} onReact={handleReact} onBookmark={handleBookmark} following={following} onFollow={handleFollow} onOpenProfile={setShowUserProfile} highlight={d.id===highlightId} swipeMode={swipeMode} T={T} onReport={handleReport} currentUserId={user?.id}/>)}
+        {!loading&&filtered.slice(2).map(d=><DisputeCard key={d.id} d={d} onSettle={handleSettle} onVote={handleVote} onAddComment={handleAddComment} onReact={handleReact} onBookmark={handleBookmark} following={following} onFollow={handleFollow} onOpenProfile={setShowUserProfile} highlight={d.id===highlightId} swipeMode={swipeMode} T={T} onReport={handleReport} currentUserId={user?.id} previousVote={userVotes[d.id]}/>)}
       </div>
     </PullToRefresh>
   );
