@@ -607,18 +607,51 @@ function ReportModal({target,targetType,onSubmit,onClose,T}) {
 
 // ─── NEW DISPUTE MODAL ────────────────────────────────────────────────────────
 function NewDisputeModal({onClose,onSubmit,T}) {
-  const [title,setTitle]=useState(""),[sideA,setSideA]=useState(""),[sideB,setSideB]=useState("");
-  const [category,setCategory]=useState("🏠 Life"),[tags,setTags]=useState([]),[tagInput,setTagInput]=useState(""),[ duration,setDuration]=useState(24),[aiTag,setAiTag]=useState(false);
+  const [title,setTitle]=useState(""),[category,setCategory]=useState("🏠 Life");
+  const [tags,setTags]=useState([]),[tagInput,setTagInput]=useState(""),[duration,setDuration]=useState(24),[aiTag,setAiTag]=useState(false);
   const [options,setOptions]=useState([{id:"A",label:"",color:"#e85d26"},{id:"B",label:"",color:"#2a7bd4"}]);
+  const [photo,setPhoto]=useState(null),[photoPreview,setPhotoPreview]=useState(null),[uploading,setUploading]=useState(false);
+  const fileRef=useRef();
   const COLORS=["#e85d26","#2a7bd4","#3dba6f","#9b6dff","#f08020","#2ab8b8"];
   const valid=title.trim()&&options.filter(o=>o.label.trim()).length>=2;
   const addTag=t=>{const t2=t.trim().toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");if(t2&&!tags.includes(t2)&&tags.length<5)setTags(p=>[...p,t2]);setTagInput("");};
   const suggestTags=async()=>{if(!title.trim())return;setAiTag(true);try{const r=await aiTags(title);setTags(p=>[...new Set([...p,...r])].slice(0,5));}catch{}setAiTag(false);};
+  const pickPhoto=e=>{const f=e.target.files[0];if(!f)return;setPhoto(f);setPhotoPreview(URL.createObjectURL(f));};
+  const removePhoto=()=>{setPhoto(null);setPhotoPreview(null);};
+  const handleSubmit=async()=>{
+    if(!valid)return;
+    setUploading(true);
+    let mediaUrl=null;
+    // Upload photo to Supabase Storage if provided
+    if(photo&&supabase){
+      try{
+        const ext=photo.name.split('.').pop();
+        const path=`disputes/${Date.now()}.${ext}`;
+        const {data,error}=await supabase.storage.from('media').upload(path,photo,{cacheControl:'3600',upsert:false});
+        if(!error){
+          const {data:urlData}=supabase.storage.from('media').getPublicUrl(path);
+          mediaUrl=urlData.publicUrl;
+        }
+      }catch(e){console.error('Upload error:',e);}
+    }
+    setUploading(false);
+    onSubmit({title,options,category,tags,duration,mediaUrl,mediaType:photo?'image':null});
+  };
   return <div style={{position:"fixed",inset:0,background:"#00000099",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:14}}>
     <div style={{background:T.bg,border:`1px solid ${T.border2}`,borderRadius:20,padding:22,width:"100%",maxWidth:460,boxShadow:T.shadow,maxHeight:"94vh",overflowY:"auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}><div style={{fontSize:17,fontWeight:900,color:T.text,fontFamily:"Georgia,serif"}}>New Dispute</div><button onClick={onClose} style={{background:"none",border:"none",color:T.text4,cursor:"pointer",fontSize:18}}>✕</button></div>
       <div style={{marginBottom:11}}><div style={{fontSize:10,color:T.text4,marginBottom:5,letterSpacing:.8}}>CATEGORY</div><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CATEGORIES.map(c=><button key={c} onClick={()=>setCategory(c)} style={{background:category===c?T.accentBg:T.surface2,border:`1px solid ${category===c?T.accent:T.border2}`,borderRadius:20,padding:"3px 9px",color:category===c?T.accent:T.text3,fontSize:10,cursor:"pointer"}}>{c}</button>)}</div></div>
       <div style={{marginBottom:8}}><div style={{fontSize:10,color:T.text4,marginBottom:5,letterSpacing:.8}}>THE DISPUTE</div><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="What are people debating?" style={{width:"100%",background:T.surface2,border:`1px solid ${T.border2}`,borderRadius:8,padding:"9px 11px",color:T.text,fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
+      {/* Photo upload */}
+      <div style={{marginBottom:11}}>
+        <div style={{fontSize:10,color:T.text4,marginBottom:7,letterSpacing:.8}}>ADD A PHOTO (optional)</div>
+        {!photoPreview?<button onClick={()=>fileRef.current?.click()} style={{width:"100%",background:T.surface2,border:`2px dashed ${T.border2}`,borderRadius:12,padding:"16px",color:T.text4,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>📷 Tap to add a photo</button>
+        :<div style={{position:"relative",borderRadius:12,overflow:"hidden",marginBottom:4}}>
+          <img src={photoPreview} style={{width:"100%",maxHeight:180,objectFit:"cover",display:"block",borderRadius:12}}/>
+          <button onClick={removePhoto} style={{position:"absolute",top:8,right:8,background:"#000000aa",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>}
+        <input ref={fileRef} type="file" accept="image/*" onChange={pickPhoto} style={{display:"none"}}/>
+      </div>
       <div style={{marginBottom:11}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><div style={{fontSize:10,color:T.text4,letterSpacing:.8}}>OPTIONS ({options.length}/6)</div><button onClick={()=>{if(options.length>=6)return;const id=String.fromCharCode(65+options.length);setOptions(p=>[...p,{id,label:"",color:COLORS[p.length%6]}]);}} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:20,padding:"2px 8px",color:T.text4,fontSize:10,cursor:"pointer"}}>+ Add</button></div>
         {options.map((o,i)=><div key={o.id} style={{display:"flex",gap:8,marginBottom:7,alignItems:"center"}}><div style={{width:9,height:9,borderRadius:"50%",background:o.color,flexShrink:0}}/><input value={o.label} onChange={e=>setOptions(p=>p.map((x,j)=>j===i?{...x,label:e.target.value}:x))} placeholder={`Option ${o.id}...`} style={{flex:1,background:T.surface2,border:`1px solid ${T.border2}`,borderRadius:8,padding:"8px 10px",color:T.text,fontSize:12,outline:"none"}}/>{options.length>2&&<button onClick={()=>setOptions(p=>p.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:T.text4,cursor:"pointer",fontSize:14,padding:0}}>×</button>}</div>)}
@@ -629,7 +662,7 @@ function NewDisputeModal({onClose,onSubmit,T}) {
         <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>{tags.map(t=><span key={t} style={{background:T.surface2,border:`1px solid ${T.border2}`,borderRadius:20,padding:"2px 7px",fontSize:10,color:T.text3,display:"flex",alignItems:"center",gap:3}}>#{t}<button onClick={()=>setTags(p=>p.filter(x=>x!==t))} style={{background:"none",border:"none",color:T.text4,cursor:"pointer",fontSize:11,padding:0}}>×</button></span>)}</div>
         <input value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"||e.key===","){e.preventDefault();addTag(tagInput);}}} placeholder="Tag + Enter..." style={{width:"100%",background:T.surface2,border:`1px solid ${T.border2}`,borderRadius:8,padding:"7px 10px",color:T.text,fontSize:12,outline:"none",boxSizing:"border-box"}}/>
       </div>
-      <div style={{display:"flex",gap:8}}><button onClick={onClose} style={{flex:1,background:"transparent",border:`1px solid ${T.border2}`,borderRadius:9,padding:9,color:T.text3,cursor:"pointer",fontSize:13}}>Cancel</button><button onClick={()=>valid&&onSubmit({title,options,category,tags,duration})} style={{flex:2,background:valid?T.red:T.surface2,border:"none",borderRadius:9,padding:9,color:valid?"#fff":T.text4,cursor:valid?"pointer":"default",fontSize:13,fontWeight:700}}>Post Dispute →</button></div>
+      <div style={{display:"flex",gap:8}}><button onClick={onClose} style={{flex:1,background:"transparent",border:`1px solid ${T.border2}`,borderRadius:9,padding:9,color:T.text3,cursor:"pointer",fontSize:13}}>Cancel</button><button onClick={handleSubmit} disabled={!valid||uploading} style={{flex:2,background:valid&&!uploading?T.red:T.surface2,border:"none",borderRadius:9,padding:9,color:valid&&!uploading?"#fff":T.text4,cursor:valid&&!uploading?"pointer":"default",fontSize:13,fontWeight:700}}>{uploading?"Uploading...":"Post Dispute →"}</button></div>
     </div>
   </div>;
 }
@@ -1050,10 +1083,23 @@ export default function App() {
     setFollowing(nf);checkBadges(voteCount,nf,disputes);
   };
 
-  const handleNewDispute=async({title,options,category,tags,duration})=>{
-    const nd={id:Date.now(),category,tags:tags||[],title,type:"text",options:options.map(o=>({...o,votes:0})),author:user?.id||"you",authorAvatar:profile.avatar,authorVerified:null,timeAgo:"just now",expiresAt:now+duration*3.6e6,reactions:{},comments:[],verdict:null,settled:false,bookmarked:false,hotStreak:false,reported:false,contentWarning:null,votesOverTime:[{t:0,v:0}]};
-    if(user&&supabase){try{await db.createDispute({...nd,expiresAt:new Date(nd.expiresAt).toISOString()},user.id);}catch(e){console.error(e);}}
-    setDisputes(p=>[nd,...p]);setShowNew(false);
+  const handleNewDispute=async({title,options,category,tags,duration,mediaUrl,mediaType})=>{
+    const expiresAt=new Date(Date.now()+duration*3.6e6).toISOString();
+    const nd={id:Date.now(),category,tags:tags||[],title,type:mediaUrl?"image":"text",options:options.map(o=>({...o,votes:0})),author:user?.id||"you",authorAvatar:profile.avatar,authorVerified:null,timeAgo:"just now",expiresAt:Date.now()+duration*3.6e6,reactions:{},comments:[],verdict:null,settled:false,bookmarked:false,hotStreak:false,reported:false,contentWarning:null,votesOverTime:[{t:0,v:0}],media:mediaUrl?{type:"image",url:mediaUrl,caption:""}:null};
+    if(user&&supabase){
+      try{
+        await db.createDispute({...nd,expiresAt,mediaUrl,mediaType},user.id);
+        // Reload from DB to get real ID
+        const fresh=await db.getDisputes(feedFilter,activeCat==="🔥 All"?null:activeCat);
+        setDisputes(fresh);
+      }catch(e){
+        console.error(e);
+        setDisputes(p=>[nd,...p]);
+      }
+    } else {
+      setDisputes(p=>[nd,...p]);
+    }
+    setShowNew(false);
     setEarnedBadges(prev=>prev.find(b=>b.id==="hot_take")?prev:[...prev,FUN_BADGES.find(b=>b.id==="hot_take")].filter(Boolean));
   };
 
