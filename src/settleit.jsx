@@ -81,10 +81,10 @@ const db = {
     const {data} = await supabase.from("bookmarks").select("dispute_id, disputes_with_details(*)").eq("user_id",userId);
     return (data||[]).map(b=>normalizeDispute(b.disputes_with_details)).filter(Boolean);
   },
-  async castVote(disputeId, optionKey, userId) {
+  async castVote(disputeId, optionId, userId) {
     if (!supabase) return true;
-    const {data:opt} = await supabase.from("options").select("id").eq("dispute_id",disputeId).eq("option_key",optionKey).single(); if(!opt?.id)return false; const {error} = await supabase.from("votes").insert({dispute_id:disputeId, option_id:opt.id, user_id:userId}); await supabase.rpc("increment_option_vote",{opt_id:opt.id});
-    
+    const {error} = await supabase.from("votes").insert({dispute_id:disputeId, option_id:optionId, user_id:userId});
+    return !error || error.code === "23505";
   },
   async addComment(disputeId, userId, text, isAI=false) {
     if (!supabase) return {id:Date.now(),user:userId,text,likes:0,time:"just now",isAI,reported:false};
@@ -863,12 +863,12 @@ function ExplorePage({disputes,onOpenDispute,onTagClick,T}) {
 }
 
 // ─── MY PROFILE PAGE ──────────────────────────────────────────────────────────
-function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile,onSignOut,T}) {
+function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile,T}) {
   const mine=disputes.filter(d=>d.author==="you"||d.author===profile.username);
   const totalV=mine.reduce((s,d)=>s+totalVotes(d),0);
   return <div style={{maxWidth:660,margin:"0 auto",padding:"12px 10px 80px"}}>
     <div style={{background:`linear-gradient(135deg,${T.purple}44,${T.blue}33)`,borderRadius:16,height:100,marginBottom:-30,position:"relative"}}>
-      <button onClick={onEditProfile} style={{position:"absolute",bottom:10,right:12,background:"#00000066",border:`1px solid rgba(255,255,255,.2)`,borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>✏️ Edit Profile</button><button onClick={onSignOut} style={{position:"absolute",bottom:10,left:12,background:"#00000066",border:"1px solid rgba(255,255,255,.2)",borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>🚪 Sign Out</button>
+      <button onClick={onEditProfile} style={{position:"absolute",bottom:10,right:12,background:"#00000066",border:`1px solid rgba(255,255,255,.2)`,borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>✏️ Edit Profile</button>
     </div>
     <div style={{padding:"0 16px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12}}>
@@ -1050,7 +1050,6 @@ export default function App() {
   // Reload when filter changes
   useEffect(()=>{if(!user)return;db.getDisputes(feedFilter,activeCat==="🔥 All"?null:activeCat).then(d=>setDisputes(d));},[feedFilter,activeCat,user]);
 
-  const handleSignOut=async()=>{if(supabase)await supabase.auth.signOut();setUser(null);setDisputes([]);setUserVotes({});setFollowing([]);setNotifs([]);};
   const handleRefresh=useCallback(async()=>{const d=await db.getDisputes(feedFilter,activeCat==="🔥 All"?null:activeCat);setDisputes(d);},[feedFilter,activeCat]);
 
   const handleSettle=async d=>{
@@ -1066,7 +1065,7 @@ export default function App() {
   const handleVote=async(id,side)=>{
     const d=disputes.find(x=>x.id===id);
     const opt=(d?.options||[]).find(o=>o.id===side);
-    if(user){await db.castVote(id,side,user.id);}
+    if(opt&&user){await db.castVote(id,opt.id||id,user.id);}
     setDisputes(p=>p.map(d=>d.id!==id?d:{...d,options:(d.options||[]).map(o=>o.id===side?{...o,votes:(o.votes||0)+1}:o)}));
     setUserVotes(p=>({...p,[id]:side}));
     const nv=voteCount+1;setVoteCount(nv);
@@ -1075,11 +1074,11 @@ export default function App() {
   };
 
   const handleAddComment=async(id,comment)=>{
-    if(user&&supabase){await db.addComment(id,user.id,comment.text,comment.isAI||false);}
+    if(user&&supabase){await db.addComment(id,user.id,comment.text,comment.isAI);}
     setDisputes(p=>p.map(d=>d.id===id?{...d,comments:[...(d.comments||[]),{...comment,id:Date.now()}]}:d));
   };
 
-  const handleReact=async(id,e,delta)=>{if(user&&supabase){await supabase.from("reactions").insert({dispute_id:id,user_id:user.id,emoji:e}).then(()=>{}).catch(()=>{});}setDisputes(p=>p.map(d=>d.id===id?{...d,reactions:{...(d.reactions||{}),[e]:Math.max(0,((d.reactions||{})[e]||0)+delta)}}:d));
+  const handleReact=(id,e,delta)=>setDisputes(p=>p.map(d=>d.id===id?{...d,reactions:{...(d.reactions||{}),[e]:Math.max(0,((d.reactions||{})[e]||0)+delta)}}:d));
 
   const handleBookmark=async id=>{
     if(user)await db.toggleBookmark(id,user.id);
@@ -1196,7 +1195,7 @@ export default function App() {
     {(tab==="home"||tab==="following"||tab==="saved")&&renderFeed()}
     {tab==="explore"&&<ExplorePage disputes={disputes} onOpenDispute={id=>{setHighlightId(id);setTab("home");setTimeout(()=>setHighlightId(null),2500);}} onTagClick={t=>{setActiveTag(t);setTab("home");}} T={T}/>}
     {tab==="dashboard"&&<CreatorDashboard disputes={disputes} T={T}/>}
-    {tab==="profile"&&<MyProfile profile={profile} disputes={disputes} following={following} streak={streak} earnedBadges={earnedBadges} onEditProfile={()=>setShowEditProfile(true)} onSignOut={handleSignOut} T={T}/>}
+    {tab==="profile"&&<MyProfile profile={profile} disputes={disputes} following={following} streak={streak} earnedBadges={earnedBadges} onEditProfile={()=>setShowEditProfile(true)} T={T}/>}
 
     {/* Bottom nav */}
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:T.surface,borderTop:`1px solid ${T.border}`,display:"flex",zIndex:20,backdropFilter:"blur(12px)"}}>
