@@ -863,12 +863,12 @@ function ExplorePage({disputes,onOpenDispute,onTagClick,T}) {
 }
 
 // ─── MY PROFILE PAGE ──────────────────────────────────────────────────────────
-function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile,T}) {
+function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile,onSignOut,T}) {
   const mine=disputes.filter(d=>d.author==="you"||d.author===profile.username);
   const totalV=mine.reduce((s,d)=>s+totalVotes(d),0);
   return <div style={{maxWidth:660,margin:"0 auto",padding:"12px 10px 80px"}}>
     <div style={{background:`linear-gradient(135deg,${T.purple}44,${T.blue}33)`,borderRadius:16,height:100,marginBottom:-30,position:"relative"}}>
-      <button onClick={onEditProfile} style={{position:"absolute",bottom:10,right:12,background:"#00000066",border:`1px solid rgba(255,255,255,.2)`,borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>✏️ Edit Profile</button>
+      <button onClick={onEditProfile} style={{position:"absolute",bottom:10,right:12,background:"#00000066",border:`1px solid rgba(255,255,255,.2)`,borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>✏️ Edit Profile</button><button onClick={onSignOut} style={{position:"absolute",bottom:10,left:12,background:"#00000066",border:"1px solid rgba(255,255,255,.2)",borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>🚪 Sign Out</button>
     </div>
     <div style={{padding:"0 16px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12}}>
