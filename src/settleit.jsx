@@ -1050,6 +1050,7 @@ export default function App() {
   // Reload when filter changes
   useEffect(()=>{if(!user)return;db.getDisputes(feedFilter,activeCat==="🔥 All"?null:activeCat).then(d=>setDisputes(d));},[feedFilter,activeCat,user]);
 
+  const handleSignOut=async()=>{if(supabase)await supabase.auth.signOut();setUser(null);setDisputes([]);setUserVotes({});setFollowing([]);setNotifs([]);};
   const handleRefresh=useCallback(async()=>{const d=await db.getDisputes(feedFilter,activeCat==="🔥 All"?null:activeCat);setDisputes(d);},[feedFilter,activeCat]);
 
   const handleSettle=async d=>{
@@ -1195,7 +1196,7 @@ export default function App() {
     {(tab==="home"||tab==="following"||tab==="saved")&&renderFeed()}
     {tab==="explore"&&<ExplorePage disputes={disputes} onOpenDispute={id=>{setHighlightId(id);setTab("home");setTimeout(()=>setHighlightId(null),2500);}} onTagClick={t=>{setActiveTag(t);setTab("home");}} T={T}/>}
     {tab==="dashboard"&&<CreatorDashboard disputes={disputes} T={T}/>}
-    {tab==="profile"&&<MyProfile profile={profile} disputes={disputes} following={following} streak={streak} earnedBadges={earnedBadges} onEditProfile={()=>setShowEditProfile(true)} T={T}/>}
+    {tab==="profile"&&<MyProfile profile={profile} disputes={disputes} following={following} streak={streak} earnedBadges={earnedBadges} onEditProfile={()=>setShowEditProfile(true)} onSignOut={handleSignOut} T={T}/>}
 
     {/* Bottom nav */}
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:T.surface,borderTop:`1px solid ${T.border}`,display:"flex",zIndex:20,backdropFilter:"blur(12px)"}}>
