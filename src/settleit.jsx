@@ -1075,11 +1075,11 @@ export default function App() {
   };
 
   const handleAddComment=async(id,comment)=>{
-    if(user&&supabase){await db.addComment(id,user.id,comment.text,comment.isAI);}
+    if(user&&supabase){await db.addComment(id,user.id,comment.text,comment.isAI||false);}
     setDisputes(p=>p.map(d=>d.id===id?{...d,comments:[...(d.comments||[]),{...comment,id:Date.now()}]}:d));
   };
 
-  const handleReact=(id,e,delta)=>setDisputes(p=>p.map(d=>d.id===id?{...d,reactions:{...(d.reactions||{}),[e]:Math.max(0,((d.reactions||{})[e]||0)+delta)}}:d));
+  const handleReact=async(id,e,delta)=>{if(user&&supabase){await supabase.from("reactions").insert({dispute_id:id,user_id:user.id,emoji:e}).then(()=>{}).catch(()=>{});}setDisputes(p=>p.map(d=>d.id===id?{...d,reactions:{...(d.reactions||{}),[e]:Math.max(0,((d.reactions||{})[e]||0)+delta)}}:d));
 
   const handleBookmark=async id=>{
     if(user)await db.toggleBookmark(id,user.id);
