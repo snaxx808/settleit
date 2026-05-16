@@ -1065,7 +1065,7 @@ export default function App() {
   const handleVote=async(id,side)=>{
     const d=disputes.find(x=>x.id===id);
     const opt=(d?.options||[]).find(o=>o.id===side);
-    if(opt&&user){await db.castVote(id,opt.id||id,user.id);}
+    if(user){await db.castVote(id,side,user.id);}
     setDisputes(p=>p.map(d=>d.id!==id?d:{...d,options:(d.options||[]).map(o=>o.id===side?{...o,votes:(o.votes||0)+1}:o)}));
     setUserVotes(p=>({...p,[id]:side}));
     const nv=voteCount+1;setVoteCount(nv);
