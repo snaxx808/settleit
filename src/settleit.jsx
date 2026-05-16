@@ -81,10 +81,10 @@ const db = {
     const {data} = await supabase.from("bookmarks").select("dispute_id, disputes_with_details(*)").eq("user_id",userId);
     return (data||[]).map(b=>normalizeDispute(b.disputes_with_details)).filter(Boolean);
   },
-  async castVote(disputeId, optionId, userId) {
+  async castVote(disputeId, optionKey, userId) {
     if (!supabase) return true;
-    const {error} = await supabase.from("votes").insert({dispute_id:disputeId, option_id:optionId, user_id:userId});
-    return !error || error.code === "23505";
+    const {data:opt} = await supabase.from("options").select("id").eq("dispute_id",disputeId).eq("option_key",optionKey).single(); if(!opt?.id)return false; const {error} = await supabase.from("votes").insert({dispute_id:disputeId, option_id:opt.id, user_id:userId}); await supabase.rpc("increment_option_vote",{opt_id:opt.id});
+    
   },
   async addComment(disputeId, userId, text, isAI=false) {
     if (!supabase) return {id:Date.now(),user:userId,text,likes:0,time:"just now",isAI,reported:false};
