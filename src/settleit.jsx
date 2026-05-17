@@ -69,9 +69,8 @@ const db = {
     const disputeIds = (data||[]).map(d=>d.id);
     let cmap = {};
     if (disputeIds.length) {
-      const {data:allComments,error:cerr} = await supabase.from('comments').select('*, profiles(display_name,username,avatar)').in('dispute_id', disputeIds).eq('is_removed',false);
+      const {data:allComments,error:cerr} = await supabase.from('comments').select('*, profiles(display_name, avatar)').in('dispute_id', disputeIds).eq('is_removed',false);
       if (cerr) console.error('comments fetch error:',cerr);
-      console.log('fetched comments:', (allComments||[]).length, 'for', disputeIds.length, 'disputes');
       (allComments||[]).forEach(c=>{(cmap[c.dispute_id]=cmap[c.dispute_id]||[]).push(c);});
     }
     return (data||[]).map(d=>normalizeDispute({...d,comments:cmap[d.id]||[]}));
@@ -799,7 +798,7 @@ function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,followin
             <div style={{width:22,height:22,borderRadius:"50%",background:T.surface2,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{c.isAI||c.is_ai?"👑":"🫵"}</div>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.displayName||c.profiles?.display_name||"User"}</span>
+                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.profiles?.display_name||"User"}</span>
                 {(c.isAI||c.is_ai)&&<span style={{fontSize:9,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:10,padding:"1px 4px"}}>Solomon</span>}
                 <span style={{fontSize:10,color:T.text5,marginLeft:"auto"}}>{c.time||c.created_at}</span>
                 <button onClick={()=>setReportTarget({text:c.text,type:"comment",id:c.id})} style={{background:"none",border:"none",color:T.text5,fontSize:9,cursor:"pointer"}}>🚩</button>
@@ -1035,9 +1034,8 @@ export default function App() {
     setLoading(true);
     // Load profile from DB
     if(supabase){
-      const {data:prof}=await supabase.from("profiles").select("*").eq("id",u.id).single();
-      console.log('prof from db:', prof?.avatar, prof?.display_name);
-      if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar||"🫵",avatarUrl:prof.avatar_url||null,country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
+      const {data:prof}=await supabase.from("profiles").select("id, display_name, username, avatar, avatar_url, bio, country, is_private, safe_mode, streak, vote_count").eq("id",u.id).single();
+      if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar,avatarUrl:prof.avatar_url||null,country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
       setStreak(prof?.streak||0);setVoteCount(prof?.vote_count||0);
       // Load follows
       const {data:follows}=await supabase.from("follows").select("following_id").eq("follower_id",u.id);
@@ -1157,13 +1155,13 @@ export default function App() {
     if(!user||!supabase){setProfile(p=>({...p,avatarUrl:URL.createObjectURL(file)}));return;}
     try{
       const ext=file.name.split('.').pop();
-      const path=`avatars/${user.id}-${Date.now()}.${ext}`;
-      const {error}=await supabase.storage.from('media').upload(path,file,{cacheControl:'3600',upsert:true});
+      const path=`${user.id}-${Date.now()}.${ext}`;
+      const {error}=await supabase.storage.from('avatars').upload(path,file,{cacheControl:'3600',upsert:true});
       if(error){console.error('Avatar upload error:',error);return;}
-      const {data:urlData}=supabase.storage.from('media').getPublicUrl(path);
+      const {data:urlData}=supabase.storage.from('avatars').getPublicUrl(path);
       const url=urlData.publicUrl;
+      await supabase.from('profiles').update({avatar_url:url}).eq('id',user.id);
       setProfile(p=>({...p,avatarUrl:url}));
-      await db.updateProfile(user.id,{avatar_url:url});
     }catch(e){console.error('Avatar upload error:',e);}
   };
 
