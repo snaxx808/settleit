@@ -779,7 +779,7 @@ function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,followin
             <div style={{width:22,height:22,borderRadius:"50%",background:T.surface2,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{c.isAI||c.is_ai?"👑":"🫵"}</div>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.user||c.username||"User"}</span>
+                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.displayName||c.profiles?.display_name||c.user||"User"}</span>
                 {(c.isAI||c.is_ai)&&<span style={{fontSize:9,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:10,padding:"1px 4px"}}>Solomon</span>}
                 <span style={{fontSize:10,color:T.text5,marginLeft:"auto"}}>{c.time||c.created_at}</span>
                 <button onClick={()=>setReportTarget({text:c.text,type:"comment",id:c.id})} style={{background:"none",border:"none",color:T.text5,fontSize:9,cursor:"pointer"}}>🚩</button>
@@ -863,11 +863,12 @@ function ExplorePage({disputes,onOpenDispute,onTagClick,T}) {
 }
 
 // ─── MY PROFILE PAGE ──────────────────────────────────────────────────────────
-function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile,T}) {
+function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile,onSignOut,T}) {
   const mine=disputes.filter(d=>d.author==="you"||d.author===profile.username);
   const totalV=mine.reduce((s,d)=>s+totalVotes(d),0);
   return <div style={{maxWidth:660,margin:"0 auto",padding:"12px 10px 80px"}}>
     <div style={{background:`linear-gradient(135deg,${T.purple}44,${T.blue}33)`,borderRadius:16,height:100,marginBottom:-30,position:"relative"}}>
+      <button onClick={onSignOut} style={{position:"absolute",top:10,right:12,background:"#00000066",border:"1px solid rgba(255,255,255,.2)",borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>🚪 Sign Out</button>
       <button onClick={onEditProfile} style={{position:"absolute",bottom:10,right:12,background:"#00000066",border:`1px solid rgba(255,255,255,.2)`,borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>✏️ Edit Profile</button>
     </div>
     <div style={{padding:"0 16px"}}>
@@ -1050,6 +1051,7 @@ export default function App() {
   // Reload when filter changes
   useEffect(()=>{if(!user)return;db.getDisputes(feedFilter,activeCat==="🔥 All"?null:activeCat).then(d=>setDisputes(d));},[feedFilter,activeCat,user]);
 
+  const handleSignOut=async()=>{if(supabase)await supabase.auth.signOut();setUser(null);setDisputes([]);setUserVotes({});setFollowing([]);setNotifs([]);};
   const handleRefresh=useCallback(async()=>{const d=await db.getDisputes(feedFilter,activeCat==="🔥 All"?null:activeCat);setDisputes(d);},[feedFilter,activeCat]);
 
   const handleSettle=async d=>{
@@ -1195,7 +1197,7 @@ export default function App() {
     {(tab==="home"||tab==="following"||tab==="saved")&&renderFeed()}
     {tab==="explore"&&<ExplorePage disputes={disputes} onOpenDispute={id=>{setHighlightId(id);setTab("home");setTimeout(()=>setHighlightId(null),2500);}} onTagClick={t=>{setActiveTag(t);setTab("home");}} T={T}/>}
     {tab==="dashboard"&&<CreatorDashboard disputes={disputes} T={T}/>}
-    {tab==="profile"&&<MyProfile profile={profile} disputes={disputes} following={following} streak={streak} earnedBadges={earnedBadges} onEditProfile={()=>setShowEditProfile(true)} T={T}/>}
+    {tab==="profile"&&<MyProfile profile={profile} disputes={disputes} following={following} streak={streak} earnedBadges={earnedBadges} onEditProfile={()=>setShowEditProfile(true)} onSignOut={handleSignOut} T={T}/>}
 
     {/* Bottom nav */}
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:T.surface,borderTop:`1px solid ${T.border}`,display:"flex",zIndex:20,backdropFilter:"blur(12px)"}}>
