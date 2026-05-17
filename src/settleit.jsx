@@ -66,7 +66,13 @@ const db = {
     else if (filter === "settled") q = q.eq("settled",true).order("created_at",{ascending:false});
     const {data,error} = await q.limit(30);
     if (error) { console.error(error); return DEMO_DISPUTES; }
-    return (data||[]).map(normalizeDispute);
+    const ids = (data||[]).map(d=>d.id);
+    let cmap = {};
+    if (ids.length) {
+      const {data:cmts} = await supabase.from("comments").select("*, profiles(username,display_name,avatar,verified)").in("dispute_id",ids).order("created_at",{ascending:true});
+      (cmts||[]).forEach(c=>{(cmap[c.dispute_id]=cmap[c.dispute_id]||[]).push(c);});
+    }
+    return (data||[]).map(d=>normalizeDispute({...d,comments:cmap[d.id]||[]}));
   },
   async getFollowingDisputes(userId) {
     if (!supabase) return DEMO_DISPUTES.slice(0,4);
@@ -164,7 +170,19 @@ function normalizeDispute(d) {
     timeAgo: d.created_at ? new Date(d.created_at).toLocaleDateString() : "recently",
     expiresAt: d.expires_at ? new Date(d.expires_at).getTime() : now+86400000,
     reactions: d.reactions||{},
-    comments: d.comments||[],
+    comments: (d.comments||[]).map(c=>({
+      id: c.id,
+      text: c.text,
+      isAI: c.is_ai||false,
+      is_ai: c.is_ai||false,
+      displayName: c.profiles?.display_name || c.profiles?.username || c.displayName,
+      profiles: c.profiles,
+      likes: c.like_count||c.likes||0,
+      time: c.created_at ? new Date(c.created_at).toLocaleString() : "recently",
+      created_at: c.created_at,
+      reported: c.reported||false,
+      is_removed: c.is_removed||false,
+    })),
     verdict: d.settled ? {winner:d.verdict_winner,reasoning:d.verdict_reasoning,confidence:d.verdict_confidence,funFact:d.verdict_fun_fact} : null,
     settled: d.settled||false,
     bookmarked: false,
@@ -863,17 +881,20 @@ function ExplorePage({disputes,onOpenDispute,onTagClick,T}) {
 }
 
 // ─── MY PROFILE PAGE ──────────────────────────────────────────────────────────
-function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile,onSignOut,T}) {
+function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile,onSignOut,onAvatarUpload,T}) {
   const mine=disputes.filter(d=>d.author==="you"||d.author===profile.username);
   const totalV=mine.reduce((s,d)=>s+totalVotes(d),0);
+  const fileInputRef=useRef();
+  const isPhoto=profile.avatar&&typeof profile.avatar==="string"&&profile.avatar.startsWith("http");
   return <div style={{maxWidth:660,margin:"0 auto",padding:"12px 10px 80px"}}>
+    <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f&&onAvatarUpload)onAvatarUpload(f);e.target.value="";}}/>
     <div style={{background:`linear-gradient(135deg,${T.purple}44,${T.blue}33)`,borderRadius:16,height:100,marginBottom:-30,position:"relative"}}>
       <button onClick={onSignOut} style={{position:"absolute",top:10,right:12,background:"#00000066",border:"1px solid rgba(255,255,255,.2)",borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>🚪 Sign Out</button>
       <button onClick={onEditProfile} style={{position:"absolute",bottom:10,right:12,background:"#00000066",border:`1px solid rgba(255,255,255,.2)`,borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>✏️ Edit Profile</button>
     </div>
     <div style={{padding:"0 16px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12}}>
-        <div style={{width:56,height:56,borderRadius:"50%",background:T.surface2,border:`3px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28}}>{profile.avatar||"🫵"}</div>
+        <div onClick={()=>fileInputRef.current?.click()} style={{width:56,height:56,borderRadius:"50%",background:T.surface2,border:`3px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,cursor:"pointer",overflow:"hidden"}}>{isPhoto?<img src={profile.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(profile.avatar||"🫵")}</div>
         <div style={{display:"flex",gap:14}}>
           {[["📝",mine.length,"Disputes"],["🗳️",fmtNum(totalV),"Votes"],["👥",following.length,"Following"]].map(([icon,val,label])=><div key={label} style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:900,color:T.accent}}>{val}</div><div style={{fontSize:9,color:T.text4}}>{label}</div></div>)}
         </div>
@@ -1119,6 +1140,21 @@ export default function App() {
     setShowEditProfile(false);
   };
 
+  const handleAvatarUpload=async file=>{
+    if(!file)return;
+    if(!user||!supabase){setProfile(p=>({...p,avatar:URL.createObjectURL(file)}));return;}
+    try{
+      const ext=file.name.split('.').pop();
+      const path=`avatars/${user.id}-${Date.now()}.${ext}`;
+      const {error}=await supabase.storage.from('media').upload(path,file,{cacheControl:'3600',upsert:true});
+      if(error){console.error('Avatar upload error:',error);return;}
+      const {data:urlData}=supabase.storage.from('media').getPublicUrl(path);
+      const url=urlData.publicUrl;
+      setProfile(p=>({...p,avatar:url}));
+      await db.updateProfile(user.id,{avatar:url});
+    }catch(e){console.error('Avatar upload error:',e);}
+  };
+
   const handleReport=(disputeId,target)=>{
     if(user)db.fileReport({reporter_id:user.id,dispute_id:target.type==="dispute"?disputeId:null,comment_id:target.type==="comment"?target.id:null,reason:"reported",detail:""});
     setDisputes(p=>p.map(d=>{if(d.id!==disputeId)return d;if(target.type==="comment")return{...d,comments:d.comments.map(c=>c.id===target.id?{...c,reported:true}:c)};return{...d,reported:true};}));
@@ -1197,7 +1233,7 @@ export default function App() {
     {(tab==="home"||tab==="following"||tab==="saved")&&renderFeed()}
     {tab==="explore"&&<ExplorePage disputes={disputes} onOpenDispute={id=>{setHighlightId(id);setTab("home");setTimeout(()=>setHighlightId(null),2500);}} onTagClick={t=>{setActiveTag(t);setTab("home");}} T={T}/>}
     {tab==="dashboard"&&<CreatorDashboard disputes={disputes} T={T}/>}
-    {tab==="profile"&&<MyProfile profile={profile} disputes={disputes} following={following} streak={streak} earnedBadges={earnedBadges} onEditProfile={()=>setShowEditProfile(true)} onSignOut={handleSignOut} T={T}/>}
+    {tab==="profile"&&<MyProfile profile={profile} disputes={disputes} following={following} streak={streak} earnedBadges={earnedBadges} onEditProfile={()=>setShowEditProfile(true)} onSignOut={handleSignOut} onAvatarUpload={handleAvatarUpload} T={T}/>}
 
     {/* Bottom nav */}
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:T.surface,borderTop:`1px solid ${T.border}`,display:"flex",zIndex:20,backdropFilter:"blur(12px)"}}>
