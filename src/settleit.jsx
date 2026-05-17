@@ -797,7 +797,7 @@ function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,followin
             <div style={{width:22,height:22,borderRadius:"50%",background:T.surface2,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{c.isAI||c.is_ai?"👑":"🫵"}</div>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.displayName||c.profiles?.display_name||c.user||"User"}</span>
+                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.displayName||c.profiles?.display_name||"User"}</span>
                 {(c.isAI||c.is_ai)&&<span style={{fontSize:9,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:10,padding:"1px 4px"}}>Solomon</span>}
                 <span style={{fontSize:10,color:T.text5,marginLeft:"auto"}}>{c.time||c.created_at}</span>
                 <button onClick={()=>setReportTarget({text:c.text,type:"comment",id:c.id})} style={{background:"none",border:"none",color:T.text5,fontSize:9,cursor:"pointer"}}>🚩</button>
@@ -885,16 +885,18 @@ function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile
   const mine=disputes.filter(d=>d.author==="you"||d.author===profile.username);
   const totalV=mine.reduce((s,d)=>s+totalVotes(d),0);
   const fileInputRef=useRef();
-  const isPhoto=profile.avatar&&typeof profile.avatar==="string"&&profile.avatar.startsWith("http");
+  const [preview,setPreview]=useState(null);
+  const displayAvatar=preview||profile.avatar;
+  const isPhoto=displayAvatar&&typeof displayAvatar==="string"&&(displayAvatar.startsWith("http")||displayAvatar.startsWith("blob:"));
   return <div style={{maxWidth:660,margin:"0 auto",padding:"12px 10px 80px"}}>
-    <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f&&onAvatarUpload)onAvatarUpload(f);e.target.value="";}}/>
+    <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f){setPreview(URL.createObjectURL(f));if(onAvatarUpload)onAvatarUpload(f);}e.target.value="";}}/>
     <div style={{background:`linear-gradient(135deg,${T.purple}44,${T.blue}33)`,borderRadius:16,height:100,marginBottom:-30,position:"relative"}}>
       <button onClick={onSignOut} style={{position:"absolute",top:10,right:12,background:"#00000066",border:"1px solid rgba(255,255,255,.2)",borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>🚪 Sign Out</button>
       <button onClick={onEditProfile} style={{position:"absolute",bottom:10,right:12,background:"#00000066",border:`1px solid rgba(255,255,255,.2)`,borderRadius:20,padding:"5px 12px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:600}}>✏️ Edit Profile</button>
     </div>
     <div style={{padding:"0 16px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12}}>
-        <div onClick={()=>fileInputRef.current?.click()} style={{width:56,height:56,borderRadius:"50%",background:T.surface2,border:`3px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,cursor:"pointer",overflow:"hidden"}}>{isPhoto?<img src={profile.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(profile.avatar||"🫵")}</div>
+        <div onClick={()=>fileInputRef.current?.click()} style={{width:56,height:56,borderRadius:"50%",background:T.surface2,border:`3px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,cursor:"pointer",overflow:"hidden"}}>{isPhoto?<img src={displayAvatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(displayAvatar||"🫵")}</div>
         <div style={{display:"flex",gap:14}}>
           {[["📝",mine.length,"Disputes"],["🗳️",fmtNum(totalV),"Votes"],["👥",following.length,"Following"]].map(([icon,val,label])=><div key={label} style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:900,color:T.accent}}>{val}</div><div style={{fontSize:9,color:T.text4}}>{label}</div></div>)}
         </div>
@@ -1032,7 +1034,7 @@ export default function App() {
     // Load profile from DB
     if(supabase){
       const {data:prof}=await supabase.from("profiles").select("*").eq("id",u.id).single();
-      if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar||"🫵",country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
+      if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar_url||prof.avatar||"🫵",avatarUrl:prof.avatar_url||null,country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
       setStreak(prof?.streak||0);setVoteCount(prof?.vote_count||0);
       // Load follows
       const {data:follows}=await supabase.from("follows").select("following_id").eq("follower_id",u.id);
@@ -1142,7 +1144,7 @@ export default function App() {
 
   const handleAvatarUpload=async file=>{
     if(!file)return;
-    if(!user||!supabase){setProfile(p=>({...p,avatar:URL.createObjectURL(file)}));return;}
+    if(!user||!supabase){const u=URL.createObjectURL(file);setProfile(p=>({...p,avatar:u,avatarUrl:u}));return;}
     try{
       const ext=file.name.split('.').pop();
       const path=`avatars/${user.id}-${Date.now()}.${ext}`;
@@ -1150,8 +1152,8 @@ export default function App() {
       if(error){console.error('Avatar upload error:',error);return;}
       const {data:urlData}=supabase.storage.from('media').getPublicUrl(path);
       const url=urlData.publicUrl;
-      setProfile(p=>({...p,avatar:url}));
-      await db.updateProfile(user.id,{avatar:url});
+      setProfile(p=>({...p,avatar:url,avatarUrl:url}));
+      await db.updateProfile(user.id,{avatar_url:url});
     }catch(e){console.error('Avatar upload error:',e);}
   };
 
