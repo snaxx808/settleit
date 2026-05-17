@@ -66,13 +66,13 @@ const db = {
     else if (filter === "settled") q = q.eq("settled",true).order("created_at",{ascending:false});
     const {data,error} = await q.limit(30);
     if (error) { console.error(error); return DEMO_DISPUTES; }
-    const ids = (data||[]).map(d=>d.id);
+    const disputeIds = (data||[]).map(d=>d.id);
     let cmap = {};
-    if (ids.length) {
-      const {data:cmts,error:cerr} = await supabase.from("comments").select("*, profiles(username,display_name,avatar,verified)").in("dispute_id",ids).order("created_at",{ascending:true});
+    if (disputeIds.length) {
+      const {data:allComments,error:cerr} = await supabase.from('comments').select('*, profiles(display_name,username,avatar)').in('dispute_id', disputeIds).eq('is_removed',false);
       if (cerr) console.error('comments fetch error:',cerr);
-      console.log('fetched comments:', (cmts||[]).length, 'for', ids.length, 'disputes');
-      (cmts||[]).forEach(c=>{(cmap[c.dispute_id]=cmap[c.dispute_id]||[]).push(c);});
+      console.log('fetched comments:', (allComments||[]).length, 'for', disputeIds.length, 'disputes');
+      (allComments||[]).forEach(c=>{(cmap[c.dispute_id]=cmap[c.dispute_id]||[]).push(c);});
     }
     return (data||[]).map(d=>normalizeDispute({...d,comments:cmap[d.id]||[]}));
   },
@@ -1036,6 +1036,7 @@ export default function App() {
     // Load profile from DB
     if(supabase){
       const {data:prof}=await supabase.from("profiles").select("*").eq("id",u.id).single();
+      console.log('prof from db:', prof?.avatar, prof?.display_name);
       if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar||"🫵",avatarUrl:prof.avatar_url||null,country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
       setStreak(prof?.streak||0);setVoteCount(prof?.vote_count||0);
       // Load follows
