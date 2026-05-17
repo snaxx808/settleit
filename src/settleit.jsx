@@ -779,7 +779,7 @@ function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,followin
             <div style={{width:22,height:22,borderRadius:"50%",background:T.surface2,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{c.isAI||c.is_ai?"👑":"🫵"}</div>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.displayName||c.profiles?.display_name||"User"}</span>
+                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.user||c.username||"User"}</span>
                 {(c.isAI||c.is_ai)&&<span style={{fontSize:9,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:10,padding:"1px 4px"}}>Solomon</span>}
                 <span style={{fontSize:10,color:T.text5,marginLeft:"auto"}}>{c.time||c.created_at}</span>
                 <button onClick={()=>setReportTarget({text:c.text,type:"comment",id:c.id})} style={{background:"none",border:"none",color:T.text5,fontSize:9,cursor:"pointer"}}>🚩</button>
@@ -1075,7 +1075,7 @@ export default function App() {
 
   const handleAddComment=async(id,comment)=>{
     if(user&&supabase){await db.addComment(id,user.id,comment.text,comment.isAI);}
-    setDisputes(p=>p.map(d=>d.id===id?{...d,comments:[...(d.comments||[]),{...comment,id:Date.now(),displayName:profile.name}]}:d));
+    setDisputes(p=>p.map(d=>d.id===id?{...d,comments:[...(d.comments||[]),{...comment,id:Date.now()}]}:d));
   };
 
   const handleReact=(id,e,delta)=>setDisputes(p=>p.map(d=>d.id===id?{...d,reactions:{...(d.reactions||{}),[e]:Math.max(0,((d.reactions||{})[e]||0)+delta)}}:d));
