@@ -69,7 +69,9 @@ const db = {
     const ids = (data||[]).map(d=>d.id);
     let cmap = {};
     if (ids.length) {
-      const {data:cmts} = await supabase.from("comments").select("*, profiles(username,display_name,avatar,verified)").in("dispute_id",ids).order("created_at",{ascending:true});
+      const {data:cmts,error:cerr} = await supabase.from("comments").select("*, profiles(username,display_name,avatar,verified)").in("dispute_id",ids).order("created_at",{ascending:true});
+      if (cerr) console.error('comments fetch error:',cerr);
+      console.log('fetched comments:', (cmts||[]).length, 'for', ids.length, 'disputes');
       (cmts||[]).forEach(c=>{(cmap[c.dispute_id]=cmap[c.dispute_id]||[]).push(c);});
     }
     return (data||[]).map(d=>normalizeDispute({...d,comments:cmap[d.id]||[]}));
@@ -689,7 +691,7 @@ function NewDisputeModal({onClose,onSubmit,T}) {
 }
 
 // ─── DISPUTE CARD ─────────────────────────────────────────────────────────────
-function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,following,onFollow,onOpenProfile,highlight,swipeMode,T,onReport,currentUserId,previousVote}) {
+function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,following,onFollow,onOpenProfile,highlight,swipeMode,T,onReport,currentUserId,currentUserName,previousVote}) {
   const [voted,setVoted]=useState(previousVote||null),[settling,setSettling]=useState(false);
   const [expanded,setExpanded]=useState(false),[commentText,setCommentText]=useState("");
   const [aiComLoad,setAiComLoad]=useState(false),[liked,setLiked]=useState([]);
@@ -704,8 +706,8 @@ function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,followin
   const tot=totalVotes(d)||1;
   const handleVote=side=>{if(voted||expired)return;setVoted(side);onVote(d.id,side);};
   const handleSettle=async()=>{setSettling(true);await onSettle(d);setSettling(false);};
-  const submitComment=()=>{if(!commentText.trim())return;onAddComment(d.id,{user:currentUserId||"you",text:commentText,likes:0,time:"just now",isAI:false,reported:false});setCommentText("");};
-  const getAiCom=async()=>{setAiComLoad(true);try{const m=await aiComment(d);onAddComment(d.id,{user:"Solomon",text:m,likes:0,time:"just now",isAI:true,reported:false});}catch{}setAiComLoad(false);};
+  const submitComment=()=>{if(!commentText.trim())return;onAddComment(d.id,{user:currentUserId||"you",displayName:currentUserName||"Anonymous",text:commentText,likes:0,time:"just now",isAI:false,reported:false});setCommentText("");};
+  const getAiCom=async()=>{setAiComLoad(true);try{const m=await aiComment(d);onAddComment(d.id,{user:"Solomon",displayName:"Solomon",text:m,likes:0,time:"just now",isAI:true,reported:false});}catch{}setAiComLoad(false);};
   const loadCoach=async()=>{if(coachData){setShowCoach(p=>!p);return;}try{const r=await aiCoach(d);setCoachData(r);}catch{setCoachData({argA:"Strong case for this position.",argB:"Compelling counter-argument.",tip:"Focus on concrete evidence."});}setShowCoach(true);};
   const loadPredict=async()=>{if(predictData){setShowPredict(p=>!p);return;}try{const r=await aiPredict(d);setPredictData(r);}catch{setPredictData({predictedWinner:d.options[0]?.id,confidence:62,reasoning:"Slight momentum toward Side A.",swing:"stable"});}setShowPredict(true);};
 
@@ -1137,8 +1139,15 @@ export default function App() {
   };
 
   const handleSaveProfile=async data=>{
+    console.log('saving avatar:', data.avatar);
+    console.log('saving profile data:', data);
     setProfile(p=>({...p,...data}));
-    if(user&&supabase){await db.updateProfile(user.id,{display_name:data.name,bio:data.bio,avatar:data.avatar,country:data.country,is_private:data.isPrivate,safe_mode:data.safeMode});}
+    if(user&&supabase){
+      const updates={display_name:data.name,bio:data.bio,avatar:data.avatar,country:data.country,is_private:data.isPrivate,safe_mode:data.safeMode};
+      console.log('updateProfile payload:', updates);
+      const {error}=await supabase.from("profiles").update(updates).eq("id",user.id).select();
+      if(error)console.error('updateProfile error:',error);
+    }
     setShowEditProfile(false);
   };
 
@@ -1195,9 +1204,9 @@ export default function App() {
           <div style={{fontSize:14}}>{tab==="saved"?"No bookmarks yet.":tab==="following"?"Follow people to see their disputes.":"No disputes found."}</div>
           {tab==="home"&&<button onClick={()=>setShowNew(true)} style={{marginTop:14,background:T.red,border:"none",borderRadius:20,padding:"8px 18px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Create one →</button>}
         </div>}
-        {!loading&&filtered.slice(0,2).map(d=><DisputeCard key={d.id} d={d} onSettle={handleSettle} onVote={handleVote} onAddComment={handleAddComment} onReact={handleReact} onBookmark={handleBookmark} following={following} onFollow={handleFollow} onOpenProfile={setShowUserProfile} highlight={d.id===highlightId} swipeMode={swipeMode} T={T} onReport={handleReport} currentUserId={user?.id} previousVote={userVotes[d.id]}/>)}
+        {!loading&&filtered.slice(0,2).map(d=><DisputeCard key={d.id} d={d} onSettle={handleSettle} onVote={handleVote} onAddComment={handleAddComment} onReact={handleReact} onBookmark={handleBookmark} following={following} onFollow={handleFollow} onOpenProfile={setShowUserProfile} highlight={d.id===highlightId} swipeMode={swipeMode} T={T} onReport={handleReport} currentUserId={user?.id} currentUserName={profile.name||user?.user_metadata?.display_name||user?.user_metadata?.username||user?.email?.split('@')[0]||'Anonymous'} previousVote={userVotes[d.id]}/>)}
         {!loading&&filtered.length>2&&tab==="home"&&<SponsoredCard d={SPONSORED_DISPUTES[0]} onVote={()=>{}} T={T}/>}
-        {!loading&&filtered.slice(2).map(d=><DisputeCard key={d.id} d={d} onSettle={handleSettle} onVote={handleVote} onAddComment={handleAddComment} onReact={handleReact} onBookmark={handleBookmark} following={following} onFollow={handleFollow} onOpenProfile={setShowUserProfile} highlight={d.id===highlightId} swipeMode={swipeMode} T={T} onReport={handleReport} currentUserId={user?.id} previousVote={userVotes[d.id]}/>)}
+        {!loading&&filtered.slice(2).map(d=><DisputeCard key={d.id} d={d} onSettle={handleSettle} onVote={handleVote} onAddComment={handleAddComment} onReact={handleReact} onBookmark={handleBookmark} following={following} onFollow={handleFollow} onOpenProfile={setShowUserProfile} highlight={d.id===highlightId} swipeMode={swipeMode} T={T} onReport={handleReport} currentUserId={user?.id} currentUserName={profile.name||user?.user_metadata?.display_name||user?.user_metadata?.username||user?.email?.split('@')[0]||'Anonymous'} previousVote={userVotes[d.id]}/>)}
       </div>
     </PullToRefresh>
   );
