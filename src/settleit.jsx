@@ -886,7 +886,7 @@ function MyProfile({profile,disputes,following,streak,earnedBadges,onEditProfile
   const totalV=mine.reduce((s,d)=>s+totalVotes(d),0);
   const fileInputRef=useRef();
   const [preview,setPreview]=useState(null);
-  const displayAvatar=preview||profile.avatar;
+  const displayAvatar=preview||profile.avatarUrl||profile.avatar;
   const isPhoto=displayAvatar&&typeof displayAvatar==="string"&&(displayAvatar.startsWith("http")||displayAvatar.startsWith("blob:"));
   return <div style={{maxWidth:660,margin:"0 auto",padding:"12px 10px 80px"}}>
     <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f){setPreview(URL.createObjectURL(f));if(onAvatarUpload)onAvatarUpload(f);}e.target.value="";}}/>
@@ -1034,7 +1034,7 @@ export default function App() {
     // Load profile from DB
     if(supabase){
       const {data:prof}=await supabase.from("profiles").select("*").eq("id",u.id).single();
-      if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar_url||prof.avatar||"🫵",avatarUrl:prof.avatar_url||null,country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
+      if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar||"🫵",avatarUrl:prof.avatar_url||null,country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
       setStreak(prof?.streak||0);setVoteCount(prof?.vote_count||0);
       // Load follows
       const {data:follows}=await supabase.from("follows").select("following_id").eq("follower_id",u.id);
@@ -1144,7 +1144,7 @@ export default function App() {
 
   const handleAvatarUpload=async file=>{
     if(!file)return;
-    if(!user||!supabase){const u=URL.createObjectURL(file);setProfile(p=>({...p,avatar:u,avatarUrl:u}));return;}
+    if(!user||!supabase){setProfile(p=>({...p,avatarUrl:URL.createObjectURL(file)}));return;}
     try{
       const ext=file.name.split('.').pop();
       const path=`avatars/${user.id}-${Date.now()}.${ext}`;
@@ -1152,7 +1152,7 @@ export default function App() {
       if(error){console.error('Avatar upload error:',error);return;}
       const {data:urlData}=supabase.storage.from('media').getPublicUrl(path);
       const url=urlData.publicUrl;
-      setProfile(p=>({...p,avatar:url,avatarUrl:url}));
+      setProfile(p=>({...p,avatarUrl:url}));
       await db.updateProfile(user.id,{avatar_url:url});
     }catch(e){console.error('Avatar upload error:',e);}
   };
