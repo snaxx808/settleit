@@ -69,7 +69,7 @@ const db = {
     const disputeIds = (data||[]).map(d=>d.id);
     let cmap = {};
     if (disputeIds.length) {
-      const {data:allComments,error:cerr} = await supabase.from('comments').select('*, profiles(display_name, avatar)').in('dispute_id', disputeIds).eq('is_removed',false);
+      const {data:allComments,error:cerr} = await supabase.from('comments').select('*, profiles!comments_user_id_fkey(display_name, avatar)').in('dispute_id', disputeIds).eq('is_removed',false);
       if (cerr) console.error('comments fetch error:',cerr);
       (allComments||[]).forEach(c=>{(cmap[c.dispute_id]=cmap[c.dispute_id]||[]).push(c);});
     }
@@ -95,7 +95,7 @@ const db = {
   },
   async addComment(disputeId, userId, text, isAI=false) {
     if (!supabase) return {id:Date.now(),user:userId,text,likes:0,time:"just now",isAI,reported:false};
-    const {data} = await supabase.from("comments").insert({dispute_id:disputeId,user_id:userId,text,is_ai:isAI}).select("*, profiles(username,display_name,avatar,verified)").single();
+    const {data} = await supabase.from("comments").insert({dispute_id:disputeId,user_id:userId,text,is_ai:isAI}).select("*, profiles!comments_user_id_fkey(username,display_name,avatar,verified)").single();
     return data;
   },
   async settleDispute(disputeId, verdict) {
