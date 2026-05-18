@@ -798,7 +798,7 @@ function DisputeCard({d,onSettle,onVote,onAddComment,onReact,onBookmark,followin
             <div style={{width:22,height:22,borderRadius:"50%",background:T.surface2,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{c.isAI||c.is_ai?"👑":"🫵"}</div>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.profiles?.display_name||"User"}</span>
+                <span style={{fontSize:11,fontWeight:700,color:T.text2}}>{c.displayName||c.profiles?.display_name||c.profiles?.username||"User"}</span>
                 {(c.isAI||c.is_ai)&&<span style={{fontSize:9,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:10,padding:"1px 4px"}}>Solomon</span>}
                 <span style={{fontSize:10,color:T.text5,marginLeft:"auto"}}>{c.time||c.created_at}</span>
                 <button onClick={()=>setReportTarget({text:c.text,type:"comment",id:c.id})} style={{background:"none",border:"none",color:T.text5,fontSize:9,cursor:"pointer"}}>🚩</button>
@@ -1035,7 +1035,7 @@ export default function App() {
     // Load profile from DB
     if(supabase){
       const {data:prof}=await supabase.from("profiles").select("id, display_name, username, avatar, avatar_url, bio, country, is_private, safe_mode, streak, vote_count").eq("id",u.id).single();
-      if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar,avatarUrl:prof.avatar_url||null,country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
+      if(prof)setProfile({name:prof.display_name||u.user_metadata?.display_name||"You",bio:prof.bio||"",avatar:prof.avatar||"🫵",avatarUrl:prof.avatar_url||null,country:prof.country||"🇺🇸 USA",isPrivate:prof.is_private||false,safeMode:prof.safe_mode||false,username:prof.username,streak:prof.streak||0,voteCount:prof.vote_count||0});
       setStreak(prof?.streak||0);setVoteCount(prof?.vote_count||0);
       // Load follows
       const {data:follows}=await supabase.from("follows").select("following_id").eq("follower_id",u.id);
@@ -1100,8 +1100,12 @@ export default function App() {
   };
 
   const handleAddComment=async(id,comment)=>{
-    if(user&&supabase){await db.addComment(id,user.id,comment.text,comment.isAI);}
-    setDisputes(p=>p.map(d=>d.id===id?{...d,comments:[...(d.comments||[]),{...comment,id:Date.now()}]}:d));
+    let savedComment=null;
+    if(user&&supabase){savedComment=await db.addComment(id,user.id,comment.text,comment.isAI);}
+    const localComment=savedComment
+      ?{...savedComment,displayName:savedComment.profiles?.display_name||savedComment.profiles?.username||comment.displayName||profile.name||"User",likes:0,time:"just now"}
+      :{...comment,id:Date.now()};
+    setDisputes(p=>p.map(d=>d.id===id?{...d,comments:[...(d.comments||[]),localComment]}:d));
   };
 
   const handleReact=(id,e,delta)=>setDisputes(p=>p.map(d=>d.id===id?{...d,reactions:{...(d.reactions||{}),[e]:Math.max(0,((d.reactions||{})[e]||0)+delta)}}:d));
