@@ -166,6 +166,7 @@ function normalizeDispute(d) {
     contentWarning: d.content_warning,
     options: (d.options||[]).map(o=>({id:o.option_key||o.id, label:o.label, votes:o.vote_count||o.votes||0, color:o.color||"#e85d26", media:o.media_url?{type:"image",url:o.media_url,caption:o.media_caption}:null})),
     author: d.author_username||d.author_id||d.author,
+    authorId: d.author_id||d.author,
     authorAvatar: d.author_avatar||"🫵",
     authorVerified: d.author_verified||null,
     timeAgo: d.created_at ? new Date(d.created_at).toLocaleDateString() : "recently",
@@ -971,8 +972,9 @@ function CreatorDashboard({disputes,T}) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [themeName,setThemeName]=useState("dark");
+  const [themeName,setThemeName]=useState(()=>localStorage.getItem("settleit_theme")||"dark");
   const T=THEMES[themeName];
+  useEffect(()=>{localStorage.setItem("settleit_theme",themeName);},[themeName]);
 
   // Auth state
   const [user,setUser]=useState(null);
@@ -1142,14 +1144,11 @@ export default function App() {
   };
 
   const handleSaveProfile=async data=>{
-    console.log('saving avatar:', data.avatar);
-    console.log('saving profile data:', data);
     setProfile(p=>({...p,...data}));
     if(user&&supabase){
       const updates={display_name:data.name,bio:data.bio,avatar:data.avatar,country:data.country,is_private:data.isPrivate,safe_mode:data.safeMode};
-      console.log('updateProfile payload:', updates);
-      const {error}=await supabase.from("profiles").update(updates).eq("id",user.id).select();
-      if(error)console.error('updateProfile error:',error);
+      const {error}=await supabase.from("profiles").update(updates).eq("id",user.id);
+      if(error){console.error('profile save error:',error);alert('Could not save profile: '+error.message);}
     }
     setShowEditProfile(false);
   };
@@ -1180,7 +1179,7 @@ export default function App() {
     let list=disputes.filter(d=>{
       if(blockedUsers.includes(d.author))return false;
       if(profile.safeMode&&hasWarn(d))return false;
-      if(tab==="following")return following.includes(d.author)||d.author===user?.id||d.author==="you";
+      if(tab==="following")return following.includes(d.authorId)||following.includes(d.author)||d.authorId===user?.id||d.author===user?.id||d.author==="you";
       if(tab==="saved")return d.bookmarked;
       if(activeTag)return d.tags?.includes(activeTag);
       return true;
