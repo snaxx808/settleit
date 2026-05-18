@@ -1110,7 +1110,10 @@ export default function App() {
     setDisputes(p=>p.map(d=>d.id===id?{...d,comments:[...(d.comments||[]),localComment]}:d));
   };
 
-  const handleReact=(id,e,delta)=>setDisputes(p=>p.map(d=>d.id===id?{...d,reactions:{...(d.reactions||{}),[e]:Math.max(0,((d.reactions||{})[e]||0)+delta)}}:d));
+  const handleReact=async(id,e,delta)=>{
+    setDisputes(p=>p.map(d=>d.id===id?{...d,reactions:{...(d.reactions||{}),[e]:Math.max(0,((d.reactions||{})[e]||0)+delta)}}:d));
+    if(delta>0&&supabase)await supabase.rpc('increment_reaction',{dispute_id:id,emoji:e});
+  };
 
   const handleBookmark=async id=>{
     if(user)await db.toggleBookmark(id,user.id);
