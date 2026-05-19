@@ -164,7 +164,7 @@ function normalizeDispute(d) {
     id: d.id, category: d.category, tags: d.tags||[], title: d.title,
     type: d.type||"text", media: d.media_url ? {type:d.media_type||"image",url:d.media_url,caption:d.media_caption} : null,
     contentWarning: d.content_warning,
-    options: (d.options||[]).map(o=>({id:o.option_key||o.id, label:o.label, votes:o.vote_count||o.votes||0, color:o.color||"#e85d26", media:o.media_url?{type:"image",url:o.media_url,caption:o.media_caption}:null})),
+    options: (d.options||[]).map(o=>({id:o.option_key||o.id, uuid:o.id, label:o.label, votes:o.vote_count||o.votes||0, color:o.color||"#e85d26", media:o.media_url?{type:"image",url:o.media_url,caption:o.media_caption}:null})),
     author: d.author_username||d.author_id||d.author,
     authorId: d.author_id||d.author,
     authorAvatar: d.author_avatar||"🫵",
@@ -1093,7 +1093,7 @@ export default function App() {
   const handleVote=async(id,side)=>{
     const d=disputes.find(x=>x.id===id);
     const opt=(d?.options||[]).find(o=>o.id===side);
-    if(opt&&user){await db.castVote(id,opt.id||id,user.id);}
+    if(opt&&user){await db.castVote(id,opt.uuid||opt.id,user.id);}
     setDisputes(p=>p.map(d=>d.id!==id?d:{...d,options:(d.options||[]).map(o=>o.id===side?{...o,votes:(o.votes||0)+1}:o)}));
     setUserVotes(p=>({...p,[id]:side}));
     const nv=voteCount+1;setVoteCount(nv);
